@@ -78,16 +78,44 @@ def test_api_end_to_end(monkeypatch):
         assert c.get("/api/health").json()["store"] == "memory"
         assert len(c.get("/api/factory").json()["machines"]) == 6
         assert len(c.get("/api/machines/CNC-1/telemetry").json()) >= 30
-        assert c.get("/api/machines/CNC-1/risk").json()["drivers"]
-        rec = c.post("/api/simulate", json={"machine_id": "CNC-1", "replications": 10}).json()
+        risk = c.get("/api/machines/CNC-1/risk").json()
+        assert risk["drivers"] and {x["key"] for x in risk["components"]} == {"bearing", "motor", "housing"}
+
+        # sign-in is required to simulate or decide
+        assert c.post("/api/simulate", json={"machine_id": "CNC-1"}).status_code == 401
+        assert c.post("/api/auth/login", json={"username": "operator", "password": "wrong"}).status_code == 401
+        op = c.post("/api/auth/login", json={"username": "operator", "password": "operator123"}).json()
+        op_h = {"Authorization": f"Bearer {op['token']}"}
+        assert op["user"]["role"] == "operator"
+
+        rec = c.post("/api/simulate", json={"machine_id": "CNC-1", "replications": 10}, headers=op_h).json()
         assert rec["payload"]["reasons"] and rec["payload"]["assumptions"]
         url = f"/api/recommendations/{rec['id']}/decision"
         # an override must name a different option and give a reason
-        assert c.post(url, json={"operator": "Asha", "action": "overridden"}).status_code == 422
-        ok = c.post(url, json={"operator": "Asha", "action": "approved"})
+        assert c.post(url, json={"action": "overridden"}, headers=op_h).status_code == 422
+        ok = c.post(url, json={"action": "approved"}, headers=op_h)
         assert ok.status_code == 200 and ok.json()["chosen_option"] == rec["recommended_option"]
-        assert c.post(url, json={"operator": "Asha", "action": "rejected"}).status_code == 409
+        assert c.post(url, json={"action": "rejected"}, headers=op_h).status_code == 409
         log = c.get("/api/audit").json()
-        assert log[0]["operator"] == "Asha" and log[0]["machine_id"] == "CNC-1"
+        assert log[0]["operator"] == "operator (operator)" and log[0]["machine_id"] == "CNC-1"
         with c.websocket_connect("/ws") as ws:
-            assert len(ws.receive_json()["machines"]) == 6
+            snap = ws.receive_json()
+            assert len(snap["machines"]) == 6 and "components" in snap["machines"][0]
+
+        # supervisor page: operators are kept out, supervisors get load check, what-if and the shift log
+        assert c.get("/api/supervisor/overview", headers=op_h).status_code == 403
+        sup = c.post("/api/auth/login", json={"username": "supervisor", "password": "supervisor123"}).json()
+        sup_h = {"Authorization": f"Bearer {sup['token']}"}
+        low = c.post("/api/supervisor/load-check", headers=sup_h,
+                     json={"machine_id": "CNC-2", "load_pct": 100, "hours": 8, "risk_override": 0.05}).json()
+        high = c.post("/api/supervisor/load-check", headers=sup_h,
+                      json={"machine_id": "CNC-2", "load_pct": 120, "hours": 8, "risk_override": 0.6}).json()
+        assert low["verdict"] == "yes" and high["verdict"] == "no"
+        assert high["failure_probability"] > high["failure_probability_nominal"] > low["failure_probability"]
+        wi = c.post("/api/supervisor/what-if", headers=sup_h,
+                    json={"machine_id": "CNC-2", "risk": 0.7, "reroute_available": False, "replications": 10}).json()
+        assert wi["circumstances"]["risk"] == 0.7 and len(wi["scenarios"]) == 4
+        assert c.post("/api/auth/logout", headers=op_h).json()["ok"]
+        sessions = c.get("/api/supervisor/overview", headers=sup_h).json()["sessions"]
+        closed = [s for s in sessions if s["username"] == "operator"][0]
+        assert closed["login_at"] and closed["logout_at"] and closed["duration_min"] is not None

@@ -14,7 +14,16 @@ its recommendation, and records what the operator decided.
 | 4 SIMULATE | SimPy discrete-event simulation of four options over an 8-hour shift, replayable | `backend/app/simulation.py` |
 | 5 DECIDE | Explained recommendation, operator approve / reject / override, audit log | `backend/app/decision.py`, `main.py` |
 
-**Stack:** FastAPI, scikit-learn, NetworkX, SimPy · React, TypeScript, Vite, Tailwind CSS, React Flow, ECharts · Supabase (Postgres).
+The app has two pages behind a sign-in:
+
+- **Factory floor** (operators and supervisors): a 3D view of the cell in which every station shows its three
+  monitored parts (bearing, drive motor, housing) and the part where a fault is developing is highlighted;
+  live telemetry, the risk score, the what-if comparison and the decision form.
+- **Supervisor** (supervisors only): all stations at a glance, a load check ("can this station take 120% load
+  for 8 hours?"), what-if runs under circumstances the supervisor chooses, the shift log of sign-in and
+  sign-out times, and every recommendation with its decision.
+
+**Stack:** FastAPI, scikit-learn, NetworkX, SimPy · React, TypeScript, Vite, Tailwind CSS, three.js (react-three-fiber), React Flow, ECharts · Supabase (Postgres).
 
 ## Run it locally
 
@@ -39,7 +48,15 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. API docs are at http://localhost:8000/docs.
+Open http://localhost:5173 and sign in. API docs are at http://localhost:8000/docs.
+
+| Demo account | Password | Sees |
+|---|---|---|
+| `operator` | `operator123` | Factory floor |
+| `supervisor` | `supervisor123` | Factory floor and Supervisor page |
+
+These are demo accounts. Set your own with `SAFE_TWIN_USERS` in `backend/.env` (see `.env.example`) before
+anyone else can reach the app. Passwords are read from that setting and are not stored in the database.
 
 Without a `.env` the app still runs, on built-in demo data held in memory (the header shows
 "demo data · not saved"). With Supabase configured the header shows "Supabase connected".
@@ -59,18 +76,20 @@ To set up a fresh project, run `supabase/schema.sql` and then `supabase/seed.sql
 | `training_samples` | 4,000 labelled rolling-window samples used to train the risk model at start-up |
 | `telemetry` | Live sensor readings, saved every 10 s while the backend runs |
 | `recommendations`, `decisions` | Every recommendation shown and every operator decision (insert-only) |
+| `session_events` | Shift log: one row per sign-in and per sign-out (insert-only) |
 
 The prototype has no login, so the backend uses the public (publishable/anon) key. Row Level Security allows
-reads on every table and inserts only on the four log tables; nothing can be updated or deleted through the API.
+reads on every table and inserts only on the five log tables; nothing can be updated or deleted through the API.
 Anyone who has the key can still insert rows, so add authentication before using this beyond a demo.
 
 ## Using the dashboard
 
 1. The cell starts with a bearing fault developing on **CNC Mill 1**; its risk climbs over the first minutes.
-2. Click any station to see its blast radius, telemetry and what is driving its score.
+2. Click any station in the 3D floor to see its parts, blast radius, telemetry and what is driving its score.
+   Drag to rotate and scroll to zoom; the dependency graph is one click away.
 3. **Simulate options** compares A continue, B throttle, C controlled shutdown, D defer to the next break.
-4. Enter your name and approve, reject or override (an override needs a reason). The decision is logged and
-   applied to the virtual cell.
+4. Approve, reject or override (an override needs a reason). The decision is logged under your sign-in name
+   and applied to the virtual cell.
 5. **Inject bearing fault** and **Drop sensors** let you test other stations and missing telemetry.
    **Reset virtual cell** starts over.
 
@@ -83,7 +102,7 @@ pytest
 
 The tests cover the evaluation points in the roadmap: model accuracy on held-out data, simulation throughput
 against the analytic value and replayability, blast-radius correctness, behaviour under missing telemetry,
-and the approve / override / audit flow through the API.
+the approve / override / audit flow, sign-in, the supervisor load check and what-if, and the shift log.
 
 ## What is real and what is simulated
 
@@ -91,6 +110,11 @@ and the approve / override / audit flow through the API.
 - The risk model is trained on **synthetic** data generated from the same wear model, so its accuracy figures
   (AUC about 0.92) say the pipeline works, not how it would perform on a real plant.
 - Costs, repair times and the worker-exposure index are illustrative assumptions, listed with every recommendation.
+- Part condition is graded from each part's sensor signal between a healthy and a worn reference value; the
+  3D shapes are schematic, not CAD models of real machines.
+- The load check scales the failure rate with load by a power law fitted to one assumption (60% load gives
+  0.4 times the rate). It is advice, not a certified load rating.
+- Sign-in is a simple token scheme meant for a demonstration, not a hardened identity system.
 - One failure mode is modelled (bearing wear). Each station feeds one downstream station.
 - Approved actions change the virtual cell only. Maintenance there takes about 40 seconds so a demo can show the full loop.
 

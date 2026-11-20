@@ -6,11 +6,11 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import config, decision, simulation
+from . import auth, config, decision, simulation, supervisor
 from .graph import blast_radius, build_graph
 from .risk import RiskModel, synthetic_training_set
 from .store import make_store
@@ -95,6 +95,41 @@ def _machine(machine_id: str) -> dict:
     return m
 
 
+# ---- Sign-in ------------------------------------------------------------------------------------
+class LoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=60)
+    password: str = Field(min_length=1, max_length=200)
+
+
+def _log_session(user: dict, session_id: str, event: str) -> None:
+    try:
+        ctx.store.insert_session_event({"session_id": session_id, "username": user["username"],
+                                        "role": user["role"], "event": event})
+    except Exception:  # noqa: BLE001 - the shift log must never block a sign-in
+        log.exception("could not write the session log")
+
+
+@app.post("/api/auth/login")
+def login(body: LoginIn):
+    user = auth.check_password(body.username, body.password)
+    if user is None:
+        raise HTTPException(401, "Wrong username or password.")
+    token, session_id = auth.issue_token(user)
+    _log_session(user, session_id, "login")
+    return {"token": token, "user": user}
+
+
+@app.post("/api/auth/logout")
+def logout(user: dict = Depends(auth.current_user)):
+    _log_session(user, user["session_id"], "logout")
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+def me(user: dict = Depends(auth.current_user)):
+    return {"username": user["username"], "role": user["role"]}
+
+
 # ---- DETECT ------------------------------------------------------------------------------------
 @app.get("/api/health")
 def health():
@@ -138,9 +173,10 @@ def risk(machine_id: str):
     _machine(machine_id)
     s = ctx.cell.state[machine_id]
     feats = s["features"]
+    drivers = ctx.model.explain(feats) if feats else []
     return {"machine_id": machine_id, "status": s["status"], "score": round(s["risk"], 4), "stale": s["stale"],
             "telemetry_completeness": round(s["completeness"], 2), "inputs": feats,
-            "drivers": ctx.model.explain(feats) if feats else [], "model": ctx.model.metrics}
+            "drivers": drivers, "components": ctx.model.components(feats, drivers), "model": ctx.model.metrics}
 
 
 # ---- TRACE -------------------------------------------------------------------------------------
@@ -157,7 +193,7 @@ class SimulateIn(BaseModel):
 
 
 @app.post("/api/simulate")
-def run_simulation(body: SimulateIn):
+def run_simulation(body: SimulateIn, user: dict = Depends(auth.current_user)):
     machine = _machine(body.machine_id)
     s = ctx.cell.state[body.machine_id]
     if s["status"] == "maintenance":
@@ -182,14 +218,13 @@ def recommendations(limit: int = 20):
 
 
 class DecisionIn(BaseModel):
-    operator: str = Field(min_length=2, max_length=80)
     action: Literal["approved", "rejected", "overridden"]
     chosen_option: Literal["A", "B", "C", "D"] | None = None
     note: str = Field(default="", max_length=500)
 
 
 @app.post("/api/recommendations/{rec_id}/decision")
-def decide(rec_id: str, body: DecisionIn):
+def decide(rec_id: str, body: DecisionIn, user: dict = Depends(auth.current_user)):
     rec = ctx.store.get_recommendation(rec_id)
     if rec is None:
         raise HTTPException(404, "Recommendation not found")
@@ -206,7 +241,7 @@ def decide(rec_id: str, body: DecisionIn):
     else:
         option = None
     dec = ctx.store.insert_decision({
-        "recommendation_id": rec_id, "operator": body.operator.strip(), "action": body.action,
+        "recommendation_id": rec_id, "operator": f"{user['username']} ({user['role']})", "action": body.action,
         "chosen_option": option, "note": body.note.strip() or None,
     })
     effect = ctx.cell.apply_option(rec["machine_id"], option) if option else "Recommendation rejected; nothing changed."
@@ -224,6 +259,73 @@ def audit(limit: int = 50):
     return out
 
 
+# ---- Supervisor ---------------------------------------------------------------------------------
+class LoadCheckIn(BaseModel):
+    machine_id: str
+    load_pct: float = Field(ge=40, le=130)
+    hours: float = Field(ge=0.5, le=24)
+    risk_override: float | None = Field(default=None, ge=0, le=0.99)
+
+
+class WhatIfIn(BaseModel):
+    machine_id: str
+    risk: float | None = Field(default=None, ge=0, le=0.99)       # None = use the live score
+    workers_nearby: int | None = Field(default=None, ge=0, le=20)
+    reroute_available: bool = True
+    replications: int = Field(default=config.REPLICATIONS, ge=10, le=300)
+
+
+@app.get("/api/supervisor/overview")
+def supervisor_overview(user: dict = Depends(auth.supervisor_only)):
+    decided = {d["recommendation_id"]: d for d in ctx.store.list_decisions(200)}
+    stations = []
+    for m in ctx.machines:
+        s = ctx.cell.state[m["id"]]
+        check = supervisor.load_check(ctx.graph, m["id"], s["risk"], 1.0, 8)
+        fault = next((c["name"] for c in s["components"] if c.get("fault_location")), None)
+        stations.append({
+            "id": m["id"], "name": m["name"], "status": s["status"], "risk": round(s["risk"], 4),
+            "stale": s["stale"], "fault_component": fault if s["status"] != "maintenance" else None,
+            "can_take_full_load": check["verdict"], "max_safe_load_pct": check["max_safe_load_pct"],
+            "hours_since_maintenance": round(s["features"]["hours_since_maint"], 1) if s["features"] else None,
+        })
+    recs = [{"id": r["id"], "created_at": r["created_at"], "machine_id": r["machine_id"],
+             "risk_score": r["risk_score"], "recommended_option": r["recommended_option"],
+             "decision": decided.get(r["id"], {}).get("action"), "decided_by": decided.get(r["id"], {}).get("operator")}
+            for r in ctx.store.list_recommendations(30)]
+    return {"stations": stations, "recommendations": recs,
+            "sessions": supervisor.pair_sessions(ctx.store.list_session_events(300))}
+
+
+@app.post("/api/supervisor/load-check")
+def supervisor_load_check(body: LoadCheckIn, user: dict = Depends(auth.supervisor_only)):
+    _machine(body.machine_id)
+    s = ctx.cell.state[body.machine_id]
+    if s["status"] == "maintenance":
+        raise HTTPException(409, "This station is in maintenance and cannot take load right now.")
+    risk = s["risk"] if body.risk_override is None else body.risk_override
+    return {**supervisor.load_check(ctx.graph, body.machine_id, risk, body.load_pct / 100, body.hours),
+            "risk_source": "live score" if body.risk_override is None else "supervisor's assumed value"}
+
+
+@app.post("/api/supervisor/what-if")
+def supervisor_what_if(body: WhatIfIn, user: dict = Depends(auth.supervisor_only)):
+    """Simulate the four options under circumstances the supervisor chooses. Nothing is stored or applied."""
+    _machine(body.machine_id)
+    g = ctx.graph.copy()
+    if body.workers_nearby is not None:
+        g.nodes[body.machine_id]["workers_nearby"] = body.workers_nearby
+    if not body.reroute_available:   # make the parallel stations a different kind so no reroute is found
+        for n in simulation.siblings(g, body.machine_id):
+            g.nodes[n]["kind"] = g.nodes[n]["kind"] + "-no-reroute"
+    risk = ctx.cell.state[body.machine_id]["risk"] if body.risk is None else body.risk
+    result = simulation.simulate(g, body.machine_id, risk, ctx.work_orders,
+                                 horizon=config.HORIZON_MIN, replications=body.replications)
+    return {**result, "circumstances": {
+        "risk": round(risk, 4), "risk_source": "live score" if body.risk is None else "assumed",
+        "workers_nearby": g.nodes[body.machine_id]["workers_nearby"], "reroute_available": body.reroute_available}}
+
+
 # ---- Virtual-cell controls (demo / evaluation) -------------------------------------------------
 class MachineIn(BaseModel):
     machine_id: str
@@ -231,20 +333,20 @@ class MachineIn(BaseModel):
 
 
 @app.post("/api/demo/inject-fault")
-def inject_fault(body: MachineIn):
+def inject_fault(body: MachineIn, user: dict = Depends(auth.current_user)):
     _machine(body.machine_id)
     ctx.cell.inject_fault(body.machine_id)
     return {"ok": True}
 
 
 @app.post("/api/demo/sensor-dropout")
-def sensor_dropout(body: MachineIn):
+def sensor_dropout(body: MachineIn, user: dict = Depends(auth.current_user)):
     _machine(body.machine_id)
     ctx.cell.set_dropout(body.machine_id, body.enabled)
     return {"ok": True}
 
 
 @app.post("/api/demo/reset")
-def reset():
+def reset(user: dict = Depends(auth.current_user)):
     ctx.cell.reset()
     return {"ok": True}

@@ -18,6 +18,15 @@ FEATURE_LABELS = {
     "current_mean": ("Motor current", "A"),
     "hours_since_maint": ("Hours since maintenance", "h"),
 }
+# Physical components each station is broken into, and the sensor signal that watches each one.
+COMPONENTS = [
+    {"key": "bearing", "name": "Spindle / drive bearing", "features": ["vib_mean", "vib_std", "vib_slope"],
+     "signal": "vib_mean", "signal_label": "Vibration", "unit": "mm/s"},
+    {"key": "motor", "name": "Drive motor", "features": ["current_mean"],
+     "signal": "current_mean", "signal_label": "Motor current", "unit": "A"},
+    {"key": "housing", "name": "Housing and lubrication", "features": ["temp_mean"],
+     "signal": "temp_mean", "signal_label": "Temperature", "unit": "°C"},
+]
 MIN_VALID_SAMPLES = 12  # fewer valid readings than this in the window: no new score
 
 
@@ -79,6 +88,7 @@ class RiskModel:
         self.model = GradientBoostingClassifier(n_estimators=150, max_depth=3, learning_rate=0.08, random_state=0)
         self.metrics: dict = {}
         self.baseline: dict[str, float] = {}
+        self.worn: dict[str, float] = {}
 
     def train(self, samples: list[dict], source: str) -> None:
         X = np.array([[float(s[f]) for f in FEATURES] for s in samples])
@@ -98,6 +108,8 @@ class RiskModel:
         # "Healthy" reference point = median of samples that did not fail. Used for explanations.
         healthy = X[~y]
         self.baseline = {f: float(np.median(healthy[:, i])) for i, f in enumerate(FEATURES)}
+        # "Worn" reference point = median of samples that did fail. Used to grade component condition.
+        self.worn = {f: float(np.median(X[y][:, i])) for i, f in enumerate(FEATURES)}
 
     def score(self, features: dict) -> float:
         x = np.array([[features[f] for f in FEATURES]])
@@ -122,3 +134,33 @@ class RiskModel:
                 "contribution": round(base - p, 4),
             })
         return sorted(out, key=lambda d: -abs(d["contribution"]))
+
+    def components(self, features: dict | None, drivers: list[dict] | None = None) -> list[dict]:
+        """Condition of each physical component, graded between the healthy and worn reference values.
+
+        `deviation` is 0 at the healthy reference and 1 at the worn reference. If model drivers are
+        given, the component whose signals contribute most to the risk is marked as the fault location.
+        """
+        out = []
+        contrib = {d["feature"]: d["contribution"] for d in (drivers or [])}
+        for c in COMPONENTS:
+            if features is None:
+                out.append({**{k: c[k] for k in ("key", "name", "signal_label", "unit")},
+                            "value": None, "healthy_value": round(self.baseline[c["signal"]], 2),
+                            "deviation": None, "status": "unknown", "contribution": 0.0, "fault_location": False})
+                continue
+            f = c["signal"]
+            span = self.worn[f] - self.baseline[f]
+            dev = 0.0 if span <= 0 else (features[f] - self.baseline[f]) / span
+            dev = float(max(0.0, min(dev, 1.5)))
+            out.append({**{k: c[k] for k in ("key", "name", "signal_label", "unit")},
+                        "value": round(features[f], 2), "healthy_value": round(self.baseline[f], 2),
+                        "deviation": round(dev, 2),
+                        "status": "fault" if dev >= 0.75 else "watch" if dev >= 0.35 else "normal",
+                        "contribution": round(sum(contrib.get(x, 0.0) for x in c["features"]), 4),
+                        "fault_location": False})
+        if drivers and features is not None:
+            top = max(out, key=lambda c: c["contribution"])
+            if top["contribution"] > 0.05:
+                top["fault_location"] = True
+        return out

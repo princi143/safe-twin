@@ -18,3 +18,8 @@ WINDOW = int(os.getenv("ROLLING_WINDOW", "30"))               # samples in the r
 HORIZON_MIN = 480                                             # one 8-hour shift
 REPLICATIONS = int(os.getenv("SIM_REPLICATIONS", "60"))       # Monte Carlo runs per scenario
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+
+# Sign-in. Format: "username:role:password", comma separated; role is operator or supervisor.
+# These defaults are demo accounts - set SAFE_TWIN_USERS before anyone else can reach the app.
+USERS = os.getenv("SAFE_TWIN_USERS") or "operator:operator:operator123,supervisor:supervisor:supervisor123"
+AUTH_SECRET = os.getenv("AUTH_SECRET") or os.urandom(24).hex()  # unset = everyone is signed out on restart

@@ -1,6 +1,6 @@
 // SIMULATE + DECIDE: option comparison, explained recommendation and the operator's decision.
 import { useEffect, useState } from "react";
-import { api, inr, pct, type OptionKey, type Recommendation, type Scenario } from "../api";
+import { api, inr, pct, type OptionKey, type Recommendation, type Scenario, type User } from "../api";
 import { Badge, Button } from "./ui";
 
 const CONF_COLOR = { low: "#ef5b5b", medium: "#e2a93b", high: "#3fb68b" } as const;
@@ -13,7 +13,7 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
   );
 }
 
-function ScenarioTable({ scenarios, recommended }: { scenarios: Scenario[]; recommended: OptionKey }) {
+export function ScenarioTable({ scenarios, recommended }: { scenarios: Scenario[]; recommended: OptionKey }) {
   const max = (f: (s: Scenario) => number) => Math.max(...scenarios.map(f));
   const cols: { head: string; hint: string; cell: (s: Scenario) => string; bar: (s: Scenario) => number; color: string }[] = [
     { head: "Unplanned failure", hint: "chance within the shift", cell: (s) => pct(s.unplanned_failure_probability), bar: (s) => s.unplanned_failure_probability, color: "#ef5b5b" },
@@ -80,26 +80,21 @@ function List({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export function DecisionPanel({ rec, onDecided }: { rec: Recommendation; onDecided: () => void }) {
+export function DecisionPanel({ rec, user, onDecided }: { rec: Recommendation; user: User; onDecided: () => void }) {
   const p = rec.payload;
-  const [operator, setOperator] = useState("");
   const [note, setNote] = useState("");
   const [override, setOverride] = useState<OptionKey | "">("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [outcome, setOutcome] = useState("");
 
-  useEffect(() => {
-    try { setOperator(localStorage.getItem("safe-twin-operator") ?? ""); } catch { /* storage unavailable */ }
-  }, []);
   useEffect(() => { setOutcome(""); setError(""); setNote(""); setOverride(""); }, [rec.id]);
 
   const submit = async (action: "approved" | "rejected" | "overridden") => {
     setBusy(true);
     setError("");
     try {
-      try { localStorage.setItem("safe-twin-operator", operator); } catch { /* storage unavailable */ }
-      const res = await api.decide(rec.id, { operator, action, chosen_option: action === "overridden" && override ? override : undefined, note });
+      const res = await api.decide(rec.id, { action, chosen_option: action === "overridden" && override ? override : undefined, note });
       setOutcome(`${action === "approved" ? "Approved" : action === "rejected" ? "Rejected" : `Overridden with option ${res.chosen_option}`} by ${res.operator}. ${res.effect}`);
       onDecided();
     } catch (e) {
@@ -109,7 +104,6 @@ export function DecisionPanel({ rec, onDecided }: { rec: Recommendation; onDecid
     }
   };
 
-  const named = operator.trim().length >= 2;
   const conf = p.confidence;
 
   return (
@@ -168,12 +162,11 @@ export function DecisionPanel({ rec, onDecided }: { rec: Recommendation; onDecid
           <p className="mt-3 rounded-md border border-ok/40 bg-ok/10 px-3 py-2 text-xs" role="status">{outcome} The decision is in the audit log.</p>
         ) : (
           <>
-            <div className="mt-3 grid gap-3 md:grid-cols-[200px_1fr]">
-              <label className="text-[11px] text-muted">
-                Authorised operator
-                <input value={operator} onChange={(e) => setOperator(e.target.value)} placeholder="Your name"
-                  className="mt-1 w-full rounded-md border border-line bg-ink px-2.5 py-1.5 text-xs text-text outline-none focus:border-accent" />
-              </label>
+            <div className="mt-3 grid gap-3 md:grid-cols-[220px_1fr]">
+              <div className="text-[11px] text-muted">
+                Deciding as
+                <div className="mt-1 rounded-md border border-line bg-ink px-2.5 py-1.5 text-xs text-text">{user.username} · {user.role}</div>
+              </div>
               <label className="text-[11px] text-muted">
                 Note (required for an override)
                 <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason, shift context, work-order constraints…"
@@ -181,10 +174,10 @@ export function DecisionPanel({ rec, onDecided }: { rec: Recommendation; onDecid
               </label>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button variant="primary" disabled={!named || busy} onClick={() => submit("approved")}>
+              <Button variant="primary" disabled={busy} onClick={() => submit("approved")}>
                 Approve option {rec.recommended_option}
               </Button>
-              <Button variant="danger" disabled={!named || busy} onClick={() => submit("rejected")}>Reject</Button>
+              <Button variant="danger" disabled={busy} onClick={() => submit("rejected")}>Reject</Button>
               <span className="mx-1 h-5 w-px bg-line" />
               <select value={override} onChange={(e) => setOverride(e.target.value as OptionKey | "")} aria-label="Override with another option"
                 className="rounded-md border border-line bg-ink px-2 py-1.5 text-xs text-text outline-none focus:border-accent">
@@ -193,8 +186,7 @@ export function DecisionPanel({ rec, onDecided }: { rec: Recommendation; onDecid
                   <option key={s.key} value={s.key}>Option {s.key} · {s.name}</option>
                 ))}
               </select>
-              <Button disabled={!named || !override || !note.trim() || busy} onClick={() => submit("overridden")}>Override</Button>
-              {!named && <span className="text-[11px] text-muted">Enter your name to record a decision.</span>}
+              <Button disabled={!override || !note.trim() || busy} onClick={() => submit("overridden")}>Override</Button>
             </div>
             {error && <p className="mt-2 text-xs text-high" role="alert">{error}</p>}
           </>

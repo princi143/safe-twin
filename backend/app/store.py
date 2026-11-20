@@ -23,6 +23,7 @@ class MemoryStore:
         self._maintenance = seed_data.maintenance_logs()
         self._recommendations: list[dict] = []
         self._decisions: list[dict] = []
+        self._session_events: list[dict] = []
         self.telemetry_rows = 0
 
     def machines(self): return [dict(m) for m in seed_data.MACHINES]
@@ -55,6 +56,14 @@ class MemoryStore:
 
     def list_decisions(self, limit: int = 50) -> list[dict]:
         return self._decisions[:limit]
+
+    def insert_session_event(self, ev: dict) -> dict:
+        ev = {"at": _now(), **ev}
+        self._session_events.insert(0, ev)
+        return ev
+
+    def list_session_events(self, limit: int = 200) -> list[dict]:
+        return self._session_events[:limit]
 
 
 class SupabaseStore:
@@ -113,6 +122,12 @@ class SupabaseStore:
 
     def list_decisions(self, limit: int = 50) -> list[dict]:
         return self._get("decisions", order="created_at.desc", limit=limit)
+
+    def insert_session_event(self, ev: dict) -> dict:
+        return self._insert("session_events", ev, returning=True)[0]
+
+    def list_session_events(self, limit: int = 200) -> list[dict]:
+        return self._get("session_events", order="at.desc", limit=limit)
 
 
 def make_store(url: str, key: str):

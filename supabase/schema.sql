@@ -85,6 +85,17 @@ create table if not exists public.decisions (
 create index if not exists decisions_created_idx on public.decisions (created_at desc);
 create index if not exists decisions_recommendation_idx on public.decisions (recommendation_id);
 
+-- Shift log: one row per sign-in and per sign-out (insert-only).
+create table if not exists public.session_events (
+  id         bigint generated always as identity primary key,
+  session_id text not null,
+  username   text not null,
+  role       text not null check (role in ('operator', 'supervisor')),
+  event      text not null check (event in ('login', 'logout')),
+  at         timestamptz not null default now()
+);
+create index if not exists session_events_at_idx on public.session_events (at desc);
+
 -- Row Level Security.
 -- The prototype has no login, so the backend talks to Supabase with the public (anon) key.
 -- Reference data is read-only; telemetry, recommendations and decisions are insert-only,
@@ -97,17 +108,18 @@ alter table public.work_orders      enable row level security;
 alter table public.training_samples enable row level security;
 alter table public.recommendations  enable row level security;
 alter table public.decisions        enable row level security;
+alter table public.session_events   enable row level security;
 
 do $$
 declare t text;
 begin
   foreach t in array array['machines','dependencies','telemetry','maintenance_logs',
-                           'work_orders','training_samples','recommendations','decisions']
+                           'work_orders','training_samples','recommendations','decisions','session_events']
   loop
     execute format('drop policy if exists "read %1$s" on public.%1$I', t);
     execute format('create policy "read %1$s" on public.%1$I for select to anon, authenticated using (true)', t);
   end loop;
-  foreach t in array array['telemetry','maintenance_logs','recommendations','decisions']
+  foreach t in array array['telemetry','maintenance_logs','recommendations','decisions','session_events']
   loop
     execute format('drop policy if exists "insert %1$s" on public.%1$I', t);
     execute format('create policy "insert %1$s" on public.%1$I for insert to anon, authenticated with check (true)', t);

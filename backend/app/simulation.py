@@ -23,6 +23,21 @@ WEIGHTS = {"worker_exposure": 0.35, "throughput_loss": 0.30, "cost": 0.20, "down
 SAFETY_GATE = 0.5           # options whose unplanned-failure probability exceeds this are never recommended
 
 
+# Running at 60% load multiplies the failure rate by 0.4 (option B). The same power law is used for any load.
+LOAD_EXPONENT = math.log(0.4) / math.log(0.6)
+
+
+def hazard_multiplier(load: float) -> float:
+    """Failure-rate multiplier at a given load (1.0 = nominal speed and load)."""
+    return max(load, 0.0) ** LOAD_EXPONENT
+
+
+def failure_probability(risk: float, load: float, minutes: float, horizon: float = 480) -> float:
+    """P(unplanned failure within `minutes` at `load`), given the 8-hour risk score at nominal load."""
+    lam = -math.log(max(1.0 - risk, 1e-6)) / horizon * hazard_multiplier(load)
+    return 1.0 - math.exp(-lam * minutes)
+
+
 @dataclass(frozen=True)
 class Scenario:
     key: str

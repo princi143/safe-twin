@@ -49,7 +49,7 @@ class VirtualCell:
                 "status": "running", "dropout": False,
                 "maint_in": None, "maint_left": 0,
                 "last_maint": last.get(mid, now - timedelta(hours=100)),
-                "risk": 0.0, "stale": False, "completeness": 1.0, "features": None,
+                "risk": 0.0, "stale": False, "completeness": 1.0, "features": None, "components": [],
                 "ring": deque(maxlen=RING),
             } for mid in self.machines
         }
@@ -104,6 +104,9 @@ class VirtualCell:
                     fresh = len(s["ring"]) <= 1 or not advance   # no history yet: take the score as is
                     s["risk"] = raw if fresh else s["risk"] + RISK_SMOOTHING * (raw - s["risk"])
                     s["features"], s["stale"] = feats, False
+                    # Locating the fault needs the model explanation; only worth it once risk is raised.
+                    drivers = self.model.explain(feats) if s["risk"] >= 0.3 and advance else None
+                    s["components"] = self.model.components(feats, drivers)
             sample["risk"] = round(s["risk"], 4)
             rows.append({"machine_id": mid, "ts": sample["ts"], "vibration": vib, "temperature": temp, "current": cur})
         return rows
@@ -119,6 +122,7 @@ class VirtualCell:
                 "stale": s["stale"], "completeness": round(s["completeness"], 2),
                 "sensor_dropout": s["dropout"],
                 "maintenance_pending": s["maint_in"] is not None,
+                "components": [] if s["status"] == "maintenance" else s["components"],
                 "vibration": last.get("vibration"), "temperature": last.get("temperature"),
                 "current": last.get("current"), "ts": last.get("ts"),
             })
