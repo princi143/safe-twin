@@ -8,7 +8,7 @@ import type { Sample } from "../api";
 
 echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, AxisPointerComponent, CanvasRenderer]);
 
-const AXIS = { axisLine: { lineStyle: { color: "#263242" } }, axisLabel: { color: "#8496ab", fontSize: 10 }, splitLine: { lineStyle: { color: "#1c2632" } } };
+const AXIS = { axisLine: { lineStyle: { color: "#DCC8E3" } }, axisLabel: { color: "#8A6F80", fontSize: 10 }, splitLine: { lineStyle: { color: "#F3E9F6" } } };
 
 export function TelemetryChart({ samples }: { samples: Sample[] }) {
   const el = useRef<HTMLDivElement>(null);
@@ -27,8 +27,8 @@ export function TelemetryChart({ samples }: { samples: Sample[] }) {
     chart.current?.setOption({
       animation: false,
       textStyle: { fontFamily: "ui-monospace, Menlo, Consolas, monospace" },
-      legend: { top: 0, left: "center", textStyle: { color: "#8496ab", fontSize: 11 }, itemWidth: 14, itemHeight: 2, icon: "rect" },
-      tooltip: { trigger: "axis", backgroundColor: "#19222e", borderColor: "#263242", textStyle: { color: "#dce5ef", fontSize: 11 } },
+      legend: { top: 0, left: "center", textStyle: { color: "#8A6F80", fontSize: 11 }, itemWidth: 14, itemHeight: 2, icon: "rect" },
+      tooltip: { trigger: "axis", backgroundColor: "#FFFFFF", borderColor: "#DCC8E3", textStyle: { color: "#3E2A2C", fontSize: 11 } },
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       grid: [
         { left: 42, right: 46, top: 30, height: 120 },
@@ -39,21 +39,21 @@ export function TelemetryChart({ samples }: { samples: Sample[] }) {
         { type: "category", data: times, gridIndex: 1, ...AXIS, axisTick: { show: false } },
       ],
       yAxis: [
-        { type: "value", name: "mm/s", gridIndex: 0, scale: true, ...AXIS, nameTextStyle: { color: "#8496ab", fontSize: 10 } },
-        { type: "value", name: "°C", gridIndex: 0, scale: true, position: "right", ...AXIS, splitLine: { show: false }, nameTextStyle: { color: "#8496ab", fontSize: 10 } },
-        { type: "value", name: "risk", gridIndex: 1, min: 0, max: 1, interval: 0.5, ...AXIS, nameTextStyle: { color: "#8496ab", fontSize: 10 } },
+        { type: "value", name: "mm/s", gridIndex: 0, scale: true, ...AXIS, nameTextStyle: { color: "#8A6F80", fontSize: 10 } },
+        { type: "value", name: "°C", gridIndex: 0, scale: true, position: "right", ...AXIS, splitLine: { show: false }, nameTextStyle: { color: "#8A6F80", fontSize: 10 } },
+        { type: "value", name: "risk", gridIndex: 1, min: 0, max: 1, interval: 0.5, ...AXIS, nameTextStyle: { color: "#8A6F80", fontSize: 10 } },
       ],
       series: [
-        { name: "Vibration", type: "line", data: samples.map((s) => s.vibration), showSymbol: false, lineStyle: { width: 1.5 }, color: "#4cc2d6", xAxisIndex: 0, yAxisIndex: 0 },
-        { name: "Temperature", type: "line", data: samples.map((s) => s.temperature), showSymbol: false, lineStyle: { width: 1.5 }, color: "#c58af9", xAxisIndex: 0, yAxisIndex: 1 },
+        { name: "Vibration", type: "line", data: samples.map((s) => s.vibration), showSymbol: false, lineStyle: { width: 1.5 }, color: "#A584AD", xAxisIndex: 0, yAxisIndex: 0 },
+        { name: "Temperature", type: "line", data: samples.map((s) => s.temperature), showSymbol: false, lineStyle: { width: 1.5 }, color: "#6B4547", xAxisIndex: 0, yAxisIndex: 1 },
         {
-          name: "Failure risk", type: "line", data: samples.map((s) => s.risk), showSymbol: false, color: "#ef5b5b",
+          name: "Failure risk", type: "line", data: samples.map((s) => s.risk), showSymbol: false, color: "#D64545",
           lineStyle: { width: 1.5 }, areaStyle: { opacity: 0.12 }, xAxisIndex: 1, yAxisIndex: 2,
           markLine: {
-            silent: true, symbol: "none", label: { color: "#8496ab", fontSize: 9, position: "end" },
+            silent: true, symbol: "none", label: { color: "#8A6F80", fontSize: 9, position: "end" },
             data: [
-              { yAxis: 0.3, name: "watch", lineStyle: { color: "#e2a93b", type: "dashed" }, label: { formatter: "watch" } },
-              { yAxis: 0.6, name: "high", lineStyle: { color: "#ef5b5b", type: "dashed" }, label: { formatter: "high" } },
+              { yAxis: 0.3, name: "watch", lineStyle: { color: "#C4871B", type: "dashed" }, label: { formatter: "watch" } },
+              { yAxis: 0.6, name: "high", lineStyle: { color: "#D64545", type: "dashed" }, label: { formatter: "high" } },
             ],
           },
         },

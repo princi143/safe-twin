@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, connectLive, hasToken, onSessionExpired, setToken, type Factory, type Health, type LiveMachine, type Sample, type User } from "./api";
+import { Factory as FactoryIcon, LogOut, ShieldCheck } from "lucide-react";
 import { Badge, Button } from "./components/ui";
 import { Login } from "./pages/Login";
 import { OperatorPage } from "./pages/OperatorPage";
@@ -76,16 +77,16 @@ export default function App() {
   if (!user) {
     return (
       <>
-        {error && <p className="m-4 rounded-md border border-high/40 bg-high/10 px-3 py-2 text-xs text-high" role="alert">{error}</p>}
-        <Login onSignedIn={(u) => { setUser(u); setPage(u.role === "supervisor" ? "supervisor" : "floor"); }} advisory={health?.advisory} />
+        {error && <p className="m-4 rounded-xl bg-high/10 px-4 py-2 text-xs text-high" role="alert">{error}</p>}
+        <Login onSignedIn={(u) => { setUser(u); setPage(u.role === "supervisor" ? "supervisor" : "floor"); }} />
       </>
     );
   }
 
-  const tab = (p: Page, label: string) => (
+  const tab = (p: Page, label: string, icon: React.ReactNode) => (
     <button onClick={() => setPage(p)} aria-current={page === p ? "page" : undefined}
-      className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${page === p ? "bg-raised text-text" : "text-muted hover:text-text"}`}>
-      {label}
+      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${page === p ? "bg-brand text-white" : "text-muted hover:text-text"}`}>
+      {icon}{label}
     </button>
   );
 
@@ -93,39 +94,32 @@ export default function App() {
     <div className="mx-auto max-w-[1500px] space-y-4 p-4 lg:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-5">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">SAFE-TWIN</h1>
-            <p className="text-xs text-muted">Factory-level failure impact and decision support · virtual production cell</p>
-          </div>
-          <nav className="flex gap-1 rounded-lg border border-line bg-panel p-1" aria-label="Pages">
-            {tab("floor", "Factory floor")}
-            {user.role === "supervisor" && tab("supervisor", "Supervisor")}
+          <h1 className="text-xl font-semibold tracking-tight text-brand">SAFE-TWIN</h1>
+          <nav className="flex gap-1 rounded-xl border border-line bg-panel p-1" aria-label="Pages">
+            {tab("floor", "Floor", <FactoryIcon size={14} />)}
+            {user.role === "supervisor" && tab("supervisor", "Supervisor", <ShieldCheck size={14} />)}
           </nav>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge color={connected ? "#3fb68b" : "#ef5b5b"}>{connected ? "live" : "offline"}</Badge>
+          <Badge color={connected ? "#2E9B74" : "#D64545"}>{connected ? "live" : "offline"}</Badge>
           {health && (
             <span title={health.store_note}>
-              <Badge color={health.store === "supabase" ? "#3fb68b" : "#e2a93b"}>
-                {health.store === "supabase" ? "Supabase connected" : "demo data · not saved"}
+              <Badge color={health.store === "supabase" ? "#2E9B74" : "#C4871B"}>
+                {health.store === "supabase" ? "saving" : "demo · not saved"}
               </Badge>
             </span>
           )}
           <span className="text-xs text-muted">{user.username} · {user.role}</span>
-          <Button onClick={signOut}>Sign out</Button>
+          <Button onClick={signOut}><LogOut size={14} />Sign out</Button>
         </div>
       </header>
 
-      {error && <p className="rounded-md border border-high/40 bg-high/10 px-3 py-2 text-xs text-high" role="alert">{error}</p>}
-      {health?.store === "memory" && (
-        <p className="rounded-md border border-watch/40 bg-watch/10 px-3 py-2 text-xs text-watch">{health.store_note}</p>
-      )}
-
+      {error && <p className="rounded-xl bg-high/10 px-4 py-2 text-xs text-high" role="alert">{error}</p>}
       {factory && page === "floor" && (
         <OperatorPage user={user} health={health} factory={factory} live={live} history={history} connected={connected}
           onReset={() => loadHistory(factory.machines)} />
       )}
-      {factory && page === "supervisor" && user.role === "supervisor" && <SupervisorPage factory={factory} live={live} />}
+      {factory && page === "supervisor" && user.role === "supervisor" && <SupervisorPage factory={factory} />}
 
       <footer className="pb-4 text-center text-[11px] text-muted">{health?.advisory}</footer>
     </div>

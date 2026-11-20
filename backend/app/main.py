@@ -176,7 +176,7 @@ def risk(machine_id: str):
     drivers = ctx.model.explain(feats) if feats else []
     return {"machine_id": machine_id, "status": s["status"], "score": round(s["risk"], 4), "stale": s["stale"],
             "telemetry_completeness": round(s["completeness"], 2), "inputs": feats,
-            "drivers": drivers, "components": ctx.model.components(feats, drivers), "model": ctx.model.metrics}
+            "drivers": drivers, "components": s["components"], "model": ctx.model.metrics}
 
 
 # ---- TRACE -------------------------------------------------------------------------------------

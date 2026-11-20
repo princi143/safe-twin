@@ -6,8 +6,8 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { LEVEL_COLOR, PART_COLOR, pct, type ComponentState, type Factory, type LiveMachine, type Machine, type Trace } from "../api";
 
-const STEEL = "#8497ab";
-const DARK = "#3d5068";
+const STEEL = "#EDE6F0";
+const DARK = "#A584AD";
 const place = (m: Machine): [number, number, number] => [(m.pos_x - 530) / 88, 0, (m.pos_y - 90) / 42];
 
 /** One monitored part. Healthy parts are steel; a part under watch or at fault is coloured, and the fault location pulses. */
@@ -32,8 +32,8 @@ function Part({ state, children, position, rotation }: {
 
 /** The body that makes each kind of station recognisable. `spin` is rotated while the station runs. */
 function Body({ kind, spin, ghost }: { kind: string; spin: React.RefObject<THREE.Group | null>; ghost: boolean }) {
-  const shell = <meshStandardMaterial color={DARK} metalness={0.3} roughness={0.7} transparent opacity={ghost ? 0.22 : 0.92} />;
-  const metal = <meshStandardMaterial color="#8fa3b8" metalness={0.6} roughness={0.35} />;
+  const shell = <meshStandardMaterial color={DARK} metalness={0.3} roughness={0.7} transparent opacity={ghost ? 0.3 : 0.95} />;
+  const metal = <meshStandardMaterial color="#6B4547" metalness={0.6} roughness={0.35} />;
   if (kind === "cnc") {
     return (
       <group>
@@ -84,7 +84,7 @@ function Body({ kind, spin, ghost }: { kind: string; spin: React.RefObject<THREE
       <mesh position={[0, 1.75, -0.2]}><boxGeometry args={[1.3, 0.1, 0.1]} />{shell}</mesh>
       <group ref={spin} position={[0, 1.5, -0.2]}>
         <mesh><boxGeometry args={[0.3, 0.3, 0.3]} />{metal}</mesh>
-        <mesh position={[0, -0.22, 0]}><cylinderGeometry args={[0.08, 0.11, 0.14, 12]} /><meshStandardMaterial color="#4cc2d6" emissive="#4cc2d6" emissiveIntensity={0.8} /></mesh>
+        <mesh position={[0, -0.22, 0]}><cylinderGeometry args={[0.08, 0.11, 0.14, 12]} /><meshStandardMaterial color="#A584AD" emissive="#A584AD" emissiveIntensity={0.8} /></mesh>
       </group>
     </group>
   );
@@ -119,11 +119,11 @@ function Station({ machine, live, selected, inRadius, onSelect }: {
       {/* plinth, tinted by risk level */}
       <mesh position={[0, 0.12, 0]}>
         <boxGeometry args={[2.3, 0.24, 2.0]} />
-        <meshStandardMaterial color={selected ? "#2f4a63" : "#223244"} metalness={0.2} roughness={0.8} />
+        <meshStandardMaterial color={selected ? "#553638" : "#6B4547"} metalness={0.2} roughness={0.8} />
       </mesh>
       <mesh position={[0, 0.25, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[1.28, 1.36, 4, 1, Math.PI / 4]} />
-        <meshBasicMaterial color={selected ? color : inRadius ? "#e2a93b" : "#2c3f52"} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={selected ? color : inRadius ? "#C4871B" : "#BFA5C7"} side={THREE.DoubleSide} />
       </mesh>
       {level === "high" && (
         <mesh ref={halo} position={[0, 0.26, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -141,7 +141,7 @@ function Station({ machine, live, selected, inRadius, onSelect }: {
         <Part state={part("bearing")} position={[0.52, 0.45, 0]} rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[0.2, 0.085, 12, 24]} /></Part>
         <mesh position={[0.75, 0.45, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.06, 0.06, 0.55, 10]} />
-          <meshStandardMaterial color="#8fa3b8" metalness={0.6} roughness={0.35} />
+          <meshStandardMaterial color="#6B4547" metalness={0.6} roughness={0.35} />
         </mesh>
       </group>
 
@@ -179,11 +179,11 @@ function Conveyor({ from, to, running, alert }: { from: Machine; to: Machine; ru
     <group>
       <mesh position={mid} rotation={[0, angle, 0]}>
         <boxGeometry args={[length, 0.1, 0.5]} />
-        <meshStandardMaterial color={alert ? "#5a4420" : "#223345"} metalness={0.2} roughness={0.8} />
+        <meshStandardMaterial color={alert ? "#C4871B" : "#8A6F80"} metalness={0.2} roughness={0.8} />
       </mesh>
       <group ref={parts}>
         {[0, 1, 2].map((i) => (
-          <mesh key={i}><boxGeometry args={[0.22, 0.16, 0.22]} /><meshStandardMaterial color={running ? "#c9d6e3" : "#5d6b7a"} metalness={0.5} roughness={0.4} /></mesh>
+          <mesh key={i}><boxGeometry args={[0.22, 0.16, 0.22]} /><meshStandardMaterial color={running ? "#FFFFFF" : "#BFA5C7"} metalness={0.5} roughness={0.4} /></mesh>
         ))}
       </group>
     </group>
@@ -214,17 +214,17 @@ export default function Factory3D({ factory, live, selected, trace, onSelect }: 
   const labels = useRef<Record<string, HTMLDivElement | null>>({});
   return (
     <div className="relative h-full w-full overflow-hidden">
-    <Canvas camera={{ position: [1.2, 7.2, 11.8], fov: 40 }} dpr={[1, 2]} style={{ background: "transparent" }}>
+    <Canvas camera={{ position: [0.8, 5.8, 9.6], fov: 40 }} dpr={[1, 2]} style={{ background: "transparent" }}>
       <LabelProjector machines={factory.machines} labels={labels} />
-      <hemisphereLight args={["#cfe3f5", "#1a2633", 0.9]} />
+      <hemisphereLight args={["#ffffff", "#D2B4DC", 1.1]} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[6, 12, 8]} intensity={1.6} />
-      <directionalLight position={[-8, 6, -6]} intensity={0.5} color="#7fb6d6" />
+      <directionalLight position={[-8, 6, -6]} intensity={0.5} color="#D2B4DC" />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
         <planeGeometry args={[40, 24]} />
-        <meshStandardMaterial color="#0d141c" roughness={0.95} />
+        <meshStandardMaterial color="#E9DBEF" roughness={0.95} />
       </mesh>
-      <gridHelper args={[40, 40, "#1d2a38", "#16212d"]} />
+      <gridHelper args={[40, 40, "#D2B4DC", "#DDCAE5"]} />
       {factory.dependencies.map((d) => (
         <Conveyor key={`${d.source}-${d.target}`} from={byId[d.source]} to={byId[d.target]}
           running={live[d.source]?.status !== "maintenance"}
@@ -242,8 +242,8 @@ export default function Factory3D({ factory, live, selected, trace, onSelect }: 
           const color = LEVEL_COLOR[l?.level ?? "normal"];
           const fault = l?.status !== "maintenance" ? l?.components.find((c) => c.fault_location) : undefined;
           return (
-            <div key={m.id} ref={(el) => { labels.current[m.id] = el; }} style={{ borderColor: m.id === selected ? color : "#263242" }}
-              className="absolute left-0 top-0 whitespace-nowrap rounded-md border bg-[#121922ee] px-2 py-1 text-center text-[11px] leading-tight">
+            <div key={m.id} ref={(el) => { labels.current[m.id] = el; }} style={{ borderColor: m.id === selected ? color : "#DCC8E3" }}
+              className="absolute left-0 top-0 whitespace-nowrap rounded-lg border bg-[#ffffffee] px-2.5 py-1 text-center text-[11px] leading-tight shadow-sm">
               <div className="font-semibold">{m.name}</div>
               <div className="num" style={{ color }}>
                 {l?.status === "maintenance" ? "in maintenance" : l ? `${pct(l.risk)} risk${l.status === "throttled" ? " · 60% load" : ""}` : "…"}

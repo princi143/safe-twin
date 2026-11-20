@@ -14,9 +14,9 @@ function Station({ data }: NodeProps<StationNode>) {
   const affected = data.lossPct !== undefined;
   return (
     <div
-      className="w-[168px] cursor-pointer rounded-lg bg-raised px-3 py-2 transition"
+      className="w-[168px] cursor-pointer rounded-xl bg-white px-3 py-2 shadow-sm transition"
       style={{
-        border: `1.5px ${affected ? "dashed" : "solid"} ${data.selected ? color : affected ? "#e2a93b" : "#263242"}`,
+        border: `1.5px ${affected ? "dashed" : "solid"} ${data.selected ? color : affected ? "#C4871B" : "#DCC8E3"}`,
         boxShadow: data.selected ? `0 0 0 3px ${color}33` : undefined,
       }}
     >
@@ -34,8 +34,8 @@ function Station({ data }: NodeProps<StationNode>) {
         </span>
       </div>
       <div className="mt-1 h-4 text-[10px]">
-        {affected && <span className="text-watch">in blast radius · −{data.lossPct}% output</span>}
-        {data.reroute && <span className="text-accent">can take rerouted work</span>}
+        {affected && <span className="text-watch">−{data.lossPct}% output</span>}
+        {data.reroute && <span className="text-accent-strong">reroute here</span>}
         {live?.stale && !affected && !data.reroute && <span className="text-watch">telemetry missing</span>}
       </div>
       <Handle type="source" position={Position.Right} />
@@ -65,7 +65,7 @@ export function FactoryGraph({ factory, live, selected, trace, onSelect }: {
 
   const edges = useMemo<Edge[]>(() => factory.dependencies.map((d) => {
     const hit = trace?.edges.some(([a, b]) => a === d.source && b === d.target) ?? false;
-    const stroke = hit ? "#e2a93b" : "#3a4a5e";
+    const stroke = hit ? "#C4871B" : "#BFA5C7";
     return {
       id: `${d.source}-${d.target}`,
       source: d.source,

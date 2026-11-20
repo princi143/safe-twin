@@ -203,8 +203,8 @@ export function connectLive(onSnapshot: (s: Snapshot) => void, onStatus: (connec
 }
 
 export const LEVEL_COLOR: Record<Level, string> = {
-  normal: "#3fb68b", watch: "#e2a93b", high: "#ef5b5b", maintenance: "#4cc2d6",
+  normal: "#2E9B74", watch: "#C4871B", high: "#D64545", maintenance: "#7A5A84",
 };
-export const PART_COLOR = { normal: "#3fb68b", watch: "#e2a93b", fault: "#ef5b5b", unknown: "#8496ab" } as const;
+export const PART_COLOR = { normal: "#2E9B74", watch: "#C4871B", fault: "#D64545", unknown: "#8A6F80" } as const;
 export const pct = (v: number, digits = 0) => `${(v * 100).toFixed(digits)}%`;
 export const inr = (v: number) => `₹${Math.round(v).toLocaleString("en-IN")}`;

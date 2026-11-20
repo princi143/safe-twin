@@ -49,7 +49,7 @@ class VirtualCell:
                 "status": "running", "dropout": False,
                 "maint_in": None, "maint_left": 0,
                 "last_maint": last.get(mid, now - timedelta(hours=100)),
-                "risk": 0.0, "stale": False, "completeness": 1.0, "features": None, "components": [],
+                "risk": 0.0, "stale": False, "completeness": 1.0, "features": None, "components": [], "contrib": {},
                 "ring": deque(maxlen=RING),
             } for mid in self.machines
         }
@@ -72,6 +72,7 @@ class VirtualCell:
                 reading = (0.2, 30.0, 0.4)  # stopped and locked out
                 if s["maint_left"] <= 0:
                     s.update(status="running", wear=0.05, rate=SLOW_DRIFT, last_maint=ts, risk=0.0)
+                    s["contrib"] = {}
                     s["ring"].clear()
                     self.completed_maintenance.append({
                         "machine_id": mid, "performed_at": ts.isoformat(), "kind": "planned",
@@ -106,7 +107,18 @@ class VirtualCell:
                     s["features"], s["stale"] = feats, False
                     # Locating the fault needs the model explanation; only worth it once risk is raised.
                     drivers = self.model.explain(feats) if s["risk"] >= 0.3 and advance else None
-                    s["components"] = self.model.components(feats, drivers)
+                    comps = self.model.components(feats, drivers)
+                    # Smooth each part's contribution so the marked fault location does not flicker between ticks.
+                    if drivers is None:
+                        s["contrib"] = {}
+                    else:
+                        for c in comps:
+                            prev = s["contrib"].get(c["key"], c["contribution"])
+                            s["contrib"][c["key"]] = prev + RISK_SMOOTHING * (c["contribution"] - prev)
+                            c["fault_location"] = False
+                        top = max(comps, key=lambda c: s["contrib"][c["key"]])
+                        top["fault_location"] = s["contrib"][top["key"]] > 0.05
+                    s["components"] = comps
             sample["risk"] = round(s["risk"], 4)
             rows.append({"machine_id": mid, "ts": sample["ts"], "vibration": vib, "temperature": temp, "current": cur})
         return rows

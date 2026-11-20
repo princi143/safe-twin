@@ -1,4 +1,8 @@
 // Factory floor: 3D cell, live telemetry, risk, what-if comparison and the operator decision.
+import {
+  Activity, AlertTriangle, Box, CircleDot, ClipboardList, Cog, Gauge as GaugeIcon, GitBranch, Radio, RotateCcw, Scale,
+  Shuffle, Thermometer, Timer, TrendingDown, Users, WifiOff, Zap,
+} from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   api, LEVEL_COLOR, PART_COLOR, pct,
@@ -7,9 +11,10 @@ import {
 import { DecisionPanel } from "../components/DecisionPanel";
 import { FactoryGraph } from "../components/FactoryGraph";
 import { TelemetryChart } from "../components/TelemetryChart";
-import { Badge, Button, Card, Stat } from "../components/ui";
+import { Badge, Button, Card, Gauge, Stat } from "../components/ui";
 
 const Factory3D = lazy(() => import("../components/Factory3D"));
+const PART_ICON = { bearing: CircleDot, motor: Zap, housing: Thermometer } as const;
 
 export function OperatorPage({ user, health, factory, live, history, connected, onReset }: {
   user: User; health: Health | null; factory: Factory; live: Record<string, LiveMachine>;
@@ -61,166 +66,157 @@ export function OperatorPage({ user, health, factory, live, history, connected, 
 
   const top = ranked[0];
   const stages = [
-    { key: "DETECT", text: connected ? `${Object.keys(live).length} stations streaming` : "waiting for telemetry" },
-    { key: "PREDICT", text: top ? `highest risk ${top.id} · ${pct(top.risk)}` : "—" },
-    { key: "TRACE", text: trace ? `${trace.affected.length} downstream of ${trace.machine_id}` : "—" },
-    { key: "SIMULATE", text: rec ? `${rec.payload.simulation.scenarios.length} options × ${rec.payload.simulation.replications} runs` : "not run yet" },
-    { key: "DECIDE", text: rec ? `option ${rec.recommended_option} proposed for ${rec.machine_id}` : "awaiting simulation" },
+    { key: "Detect", icon: Radio, text: connected ? `${Object.keys(live).length} stations live` : "waiting" },
+    { key: "Predict", icon: GaugeIcon, text: top ? `${top.id} · ${pct(top.risk)}` : "—" },
+    { key: "Trace", icon: GitBranch, text: trace ? `${trace.affected.length} downstream` : "—" },
+    { key: "Simulate", icon: Shuffle, text: rec ? `${rec.payload.simulation.scenarios.length} options` : "not run" },
+    { key: "Decide", icon: Scale, text: rec ? `option ${rec.recommended_option}` : "waiting" },
   ];
-  const parts = risk?.machine_id === selected && sel?.status !== "maintenance" ? risk.components : [];
+  const parts = sel && sel.status !== "maintenance" ? sel.components : [];
   const firstStarve = trace?.affected.find((a) => a.starves_after_min !== null)?.starves_after_min;
 
   return (
     <div className="space-y-4">
-      {error && <p className="rounded-md border border-high/40 bg-high/10 px-3 py-2 text-xs text-high" role="alert">{error}</p>}
+      {error && <p className="rounded-xl bg-high/10 px-4 py-2 text-xs text-high" role="alert">{error}</p>}
 
-      <ol className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-5">
-        {stages.map((s, i) => (
-          <li key={s.key} className="bg-panel px-3 py-2">
-            <div className="num text-[10px] font-semibold tracking-widest text-accent">{i + 1} · {s.key}</div>
-            <div className="truncate text-xs text-muted">{s.text}</div>
+      <ol className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {stages.map((s) => (
+          <li key={s.key} className="flex items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-white"><s.icon size={18} /></span>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold">{s.key}</div>
+              <div className="num truncate text-[11px] text-muted">{s.text}</div>
+            </div>
           </li>
         ))}
       </ol>
 
-      <Card title="Production cell" stage="TRACE"
+      <Card title="Production cell" icon={<Box size={16} />}
         action={
           <div className="flex items-center gap-2">
-            <div className="flex gap-1 rounded-md border border-line p-0.5">
+            <div className="flex gap-1 rounded-lg bg-raised p-0.5">
               {(["3d", "graph"] as const).map((v) => (
                 <button key={v} onClick={() => setView(v)}
-                  className={`rounded px-2.5 py-1 text-[11px] font-semibold ${view === v ? "bg-raised text-text" : "text-muted hover:text-text"}`}>
-                  {v === "3d" ? "3D floor" : "Dependency graph"}
+                  className={`rounded-md px-3 py-1 text-[11px] font-semibold ${view === v ? "bg-panel text-brand shadow-sm" : "text-muted"}`}>
+                  {v === "3d" ? "3D" : "Graph"}
                 </button>
               ))}
             </div>
-            <Button variant="ghost" onClick={reset}>Reset virtual cell</Button>
+            <Button variant="ghost" onClick={reset} title="Reset the virtual cell"><RotateCcw size={14} />Reset</Button>
           </div>
         }>
-        <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-          <div className="h-[430px] overflow-hidden rounded-md border border-line bg-ink">
+        <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+          <div className="h-[500px] overflow-hidden rounded-2xl bg-gradient-to-b from-[#EFE3F3] to-[#DCC8E3]">
             {view === "3d" ? (
-              <Suspense fallback={<p className="p-6 text-xs text-muted">Loading the 3D floor…</p>}>
+              <Suspense fallback={<p className="p-6 text-xs text-muted">Loading…</p>}>
                 <Factory3D factory={factory} live={live} selected={selected} trace={trace} onSelect={select} />
               </Suspense>
             ) : (
-              <div className="p-3"><FactoryGraph factory={factory} live={live} selected={selected} trace={trace} onSelect={select} /></div>
+              <div className="p-3 pt-16"><FactoryGraph factory={factory} live={live} selected={selected} trace={trace} onSelect={select} /></div>
             )}
           </div>
-          <div>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">Parts of {machine?.name ?? "the station"}</h3>
-            {sel?.status === "maintenance" && <p className="mt-2 text-xs text-muted">The station is stopped for maintenance.</p>}
-            <ul className="mt-2 space-y-2">
-              {parts.map((c) => (
-                <li key={c.key} className="rounded-md border px-3 py-2" style={{ borderColor: c.fault_location ? "#ef5b5b" : "#263242" }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold">{c.name}</span>
-                    <Badge color={PART_COLOR[c.status]}>{c.fault_location ? "fault here" : c.status}</Badge>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 rounded-2xl bg-raised p-3">
+              <Gauge value={sel?.status === "maintenance" ? 0 : sel?.risk ?? 0} color={LEVEL_COLOR[sel?.level ?? "normal"]} size={84}
+                text={sel?.status === "maintenance" ? "—" : undefined} />
+              <div>
+                <div className="text-sm font-semibold">{machine?.name ?? "—"}</div>
+                <Badge color={LEVEL_COLOR[sel?.level ?? "normal"]}>{sel?.level ?? "…"}</Badge>
+              </div>
+            </div>
+            {parts.map((c) => {
+              const Icon = PART_ICON[c.key];
+              return (
+                <div key={c.key} className="rounded-2xl border p-3" style={{ borderColor: c.fault_location ? PART_COLOR.fault : "#DCC8E3" }}>
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg text-white" style={{ background: PART_COLOR[c.status] }}><Icon size={16} /></span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold">{c.name}</div>
+                      <div className="num text-[11px] text-muted">{c.value ?? "—"} {c.unit}</div>
+                    </div>
+                    {c.fault_location && <AlertTriangle size={16} className="text-high" aria-label="Fault here" />}
                   </div>
-                  <div className="num mt-1 text-[11px] text-muted">
-                    {c.signal_label} {c.value ?? "—"} {c.unit} · healthy {c.healthy_value} {c.unit}
+                  <div className="mt-2 h-1.5 rounded-full bg-raised">
+                    <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, (c.deviation ?? 0) * 100)}%`, background: PART_COLOR[c.status] }} />
                   </div>
-                  <div className="mt-1.5 h-1 rounded bg-line">
-                    <div className="h-1 rounded" style={{ width: `${Math.min(100, (c.deviation ?? 0) * 100)}%`, background: PART_COLOR[c.status] }} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-[11px] leading-relaxed text-muted">
-              Click a station to inspect it; drag to rotate, scroll to zoom. Coloured parts have moved away from their healthy reading.
-              “Fault here” marks the part whose signals contribute most to the risk score.
-            </p>
+                </div>
+              );
+            })}
+            {sel?.status === "maintenance" && <p className="rounded-2xl bg-raised p-3 text-xs text-muted">In maintenance</p>}
           </div>
         </div>
         {trace && machine && (
-          <div className="mt-3 grid grid-cols-2 gap-4 border-t border-line pt-3 md:grid-cols-5">
-            <Stat label="If this station stops" value={`−${trace.line_loss_pct}%`} hint={`line output ${trace.line_rate_baseline} → ${trace.line_rate_if_down} parts/h`} />
-            <Stat label="Stations affected" value={trace.affected.length} hint={trace.affected.map((a) => a.id).join(", ") || "none downstream"} />
-            <Stat label="First station starves" value={firstStarve != null ? `${firstStarve} min` : "—"} hint="with buffers half full" />
-            <Stat label="Reroute available" value={trace.reroute_to.length ? trace.reroute_to.join(", ") : "none"} hint={trace.is_on_bottleneck ? "this stage is the line bottleneck" : `bottleneck: ${trace.bottleneck_stage.join(" + ")}`} />
-            <Stat label="Workers in radius" value={trace.workers_in_radius} hint="at this and downstream stations" />
+          <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-5">
+            <Stat icon={<TrendingDown size={16} />} label="line output if it stops" value={`−${trace.line_loss_pct}%`} />
+            <Stat icon={<GitBranch size={16} />} label="stations affected" value={trace.affected.length} />
+            <Stat icon={<Timer size={16} />} label="until next station starves" value={firstStarve != null ? `${firstStarve} min` : "—"} />
+            <Stat icon={<Shuffle size={16} />} label="reroute to" value={trace.reroute_to.length ? trace.reroute_to.join(", ") : "none"} />
+            <Stat icon={<Users size={16} />} label="workers in radius" value={trace.workers_in_radius} />
           </div>
         )}
       </Card>
 
       {machine && sel && (
-        <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-          <Card title={`${machine.name} · live telemetry`} stage="DETECT"
+        <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+          <Card title={machine.name} icon={<Activity size={16} />}
             action={
               <div className="flex gap-2">
-                <Button onClick={() => act(() => api.injectFault(selected))}>Inject bearing fault</Button>
+                <Button onClick={() => act(() => api.injectFault(selected))}><AlertTriangle size={14} />Inject fault</Button>
                 <Button onClick={() => act(() => api.sensorDropout(selected, !sel.sensor_dropout))}>
-                  {sel.sensor_dropout ? "Restore sensors" : "Drop sensors"}
+                  <WifiOff size={14} />{sel.sensor_dropout ? "Restore sensors" : "Drop sensors"}
                 </Button>
               </div>
             }>
             <TelemetryChart samples={history[selected] ?? []} />
-            <div className="mt-2 grid grid-cols-4 gap-4 border-t border-line pt-3">
-              <Stat label="Vibration" value={sel.vibration?.toFixed(2) ?? "—"} hint="mm/s" />
-              <Stat label="Temperature" value={sel.temperature?.toFixed(1) ?? "—"} hint="°C" />
-              <Stat label="Motor current" value={sel.current?.toFixed(1) ?? "—"} hint="A" />
-              <Stat label="Window complete" value={pct(sel.completeness)} hint={sel.stale ? "score held at last value" : "rolling window"} />
-            </div>
+            {sel.stale && <p className="mt-2 rounded-xl bg-watch/10 px-3 py-2 text-xs text-watch">Sensors missing. Risk is held at the last value.</p>}
           </Card>
 
-          <Card title="Failure-risk score" stage="PREDICT" action={<Badge color={LEVEL_COLOR[sel.level]}>{sel.level}</Badge>}>
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <div className="num text-5xl font-semibold leading-none" style={{ color: LEVEL_COLOR[sel.level] }}>
-                  {sel.status === "maintenance" ? "—" : pct(sel.risk)}
-                </div>
-                <div className="mt-1 text-[11px] text-muted">chance of unplanned bearing failure in the next 8 h if nothing changes</div>
-              </div>
-              {health && (
-                <div className="num text-right text-[11px] text-muted">
-                  holdout AUC {health.model.auc}<br />Brier {health.model.brier}<br />{health.model.n_train} training windows
-                </div>
-              )}
-            </div>
-            {sel.stale && <p className="mt-3 rounded-md border border-watch/40 bg-watch/10 px-3 py-2 text-xs text-watch">Telemetry is missing. The score shown is the last known value, not a new estimate.</p>}
-            <h3 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted">What is driving the score</h3>
-            <div className="space-y-2">
+          <Card title="What drives the risk" icon={<Cog size={16} />}
+            action={health && <span className="num text-[11px] text-muted" title="Accuracy of the risk model on held-out data">AUC {health.model.auc}</span>}>
+            <div className="space-y-3">
               {(risk?.machine_id === selected && sel.status !== "maintenance" ? risk.drivers : []).map((d) => (
-                <div key={d.feature} className="grid grid-cols-[150px_1fr_52px] items-center gap-2 text-xs">
-                  <span title={`now ${d.value} ${d.unit}, healthy ${d.healthy_value} ${d.unit}`}>{d.label}</span>
-                  <div className="h-1.5 rounded bg-line">
-                    <div className="h-1.5 rounded" style={{ width: `${Math.min(100, Math.abs(d.contribution) * 100)}%`, background: d.contribution >= 0 ? "#ef5b5b" : "#3fb68b" }} />
+                <div key={d.feature} title={`now ${d.value} ${d.unit} · healthy ${d.healthy_value} ${d.unit}`}>
+                  <div className="flex justify-between text-xs">
+                    <span>{d.label}</span>
+                    <span className="num text-muted">{d.contribution >= 0 ? "+" : "−"}{Math.abs(d.contribution * 100).toFixed(0)}</span>
                   </div>
-                  <span className="num text-right">{d.contribution >= 0 ? "+" : "−"}{Math.abs(d.contribution * 100).toFixed(0)} pts</span>
+                  <div className="mt-1 h-2 rounded-full bg-raised">
+                    <div className="h-2 rounded-full" style={{ width: `${Math.min(100, Math.abs(d.contribution) * 100)}%`, background: d.contribution >= 0 ? "#D64545" : "#2E9B74" }} />
+                  </div>
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[11px] text-muted">Points = how much the risk would fall if that one input were at its healthy value.</p>
           </Card>
         </div>
       )}
 
       {machine && sel && (
-        <Card title={`What-if comparison${rec ? ` · ${rec.payload.machine.name}` : ""}`} stage="SIMULATE · DECIDE"
+        <Card title={rec ? `Options · ${rec.payload.machine.name}` : "Options"} icon={<Shuffle size={16} />}
           action={
             <Button variant="primary" disabled={simulating || sel.status === "maintenance"} onClick={simulate}>
-              {simulating ? "Simulating…" : `Simulate options for ${machine.id}`}
+              <Shuffle size={14} />{simulating ? "Simulating…" : `Simulate ${machine.id}`}
             </Button>
           }>
           {rec ? (
             <DecisionPanel rec={rec} user={user} onDecided={() => api.audit().then(setAudit).catch(() => undefined)} />
           ) : (
-            <p className="py-6 text-center text-xs text-muted">
-              Run the simulation to compare continuing, throttling, a controlled shutdown and deferring to the next break for {machine.name}.
-            </p>
+            <div className="flex flex-col items-center gap-2 py-8 text-muted">
+              <Shuffle size={28} />
+              <p className="text-xs">Simulate to compare four responses</p>
+            </div>
           )}
         </Card>
       )}
 
-      <Card title="Decision audit log" stage="AUDIT">
+      <Card title="Decisions" icon={<ClipboardList size={16} />}>
         {audit.length === 0 ? (
-          <p className="py-3 text-center text-xs text-muted">No decisions recorded yet.</p>
+          <p className="py-3 text-center text-xs text-muted">None yet</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-xs">
+            <table className="w-full min-w-[640px] text-xs">
               <thead>
                 <tr className="text-left text-muted">
-                  {["Time", "Station", "Risk", "Recommended", "Decision", "Chosen", "Decided by", "Note"].map((h) => (
+                  {["Time", "Station", "Risk", "Decision", "Option", "By", "Note"].map((h) => (
                     <th key={h} className="border-b border-line pb-2 pr-3 font-medium">{h}</th>
                   ))}
                 </tr>
@@ -231,9 +227,8 @@ export function OperatorPage({ user, health, factory, live, history, connected, 
                     <td className="num border-b border-line/60 py-2 pr-3">{new Date(a.created_at).toLocaleString()}</td>
                     <td className="border-b border-line/60 py-2 pr-3">{a.machine_id ?? "—"}</td>
                     <td className="num border-b border-line/60 py-2 pr-3">{a.risk_score != null ? pct(Number(a.risk_score)) : "—"}</td>
-                    <td className="num border-b border-line/60 py-2 pr-3">{a.recommended_option ?? "—"}</td>
                     <td className="border-b border-line/60 py-2 pr-3">
-                      <Badge color={a.action === "approved" ? "#3fb68b" : a.action === "rejected" ? "#ef5b5b" : "#e2a93b"}>{a.action}</Badge>
+                      <Badge color={a.action === "approved" ? "#2E9B74" : a.action === "rejected" ? "#D64545" : "#C4871B"}>{a.action}</Badge>
                     </td>
                     <td className="num border-b border-line/60 py-2 pr-3">{a.chosen_option ?? "—"}</td>
                     <td className="border-b border-line/60 py-2 pr-3">{a.operator}</td>
