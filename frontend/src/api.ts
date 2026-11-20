@@ -87,8 +87,12 @@ export interface AuditEntry {
   machine_id: string | null; risk_score: number | null; confidence: number | null; recommended_option: OptionKey | null;
 }
 
+// Local development leaves VITE_API_URL unset and uses the Vite proxy. A hosted frontend sets it
+// to the backend's public address, e.g. https://safe-twin-api.onrender.com
+const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...init });
+  const res = await fetch(BASE + path, { headers: { "Content-Type": "application/json" }, ...init });
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try {
@@ -122,8 +126,8 @@ export function connectLive(onSnapshot: (s: Snapshot) => void, onStatus: (connec
   let closed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const open = () => {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    const origin = BASE || location.origin;
+    ws = new WebSocket(`${origin.replace(/^http/, "ws")}/ws`);
     ws.onopen = () => onStatus(true);
     ws.onmessage = (e) => onSnapshot(JSON.parse(e.data));
     ws.onclose = () => {

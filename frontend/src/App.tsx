@@ -41,7 +41,7 @@ export default function App() {
         await loadHistory(f.machines);
       } catch {
         if (stop) return;
-        setError("Can't reach the SAFE-TWIN backend on port 8000. Start it and this page will connect by itself.");
+        setError("Can't reach the SAFE-TWIN backend yet. If it is starting or waking up, this page will connect by itself.");
         setTimeout(load, 3000);
       }
     };

@@ -1,0 +1,22 @@
+# Render blueprint for the SAFE-TWIN backend (FastAPI + WebSocket).
+# Render dashboard -> New -> Blueprint -> pick this repo. You will be asked for SUPABASE_KEY.
+services:
+  - type: web
+    name: safe-twin-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: SUPABASE_URL
+        value: https://bvaooricbjnmqdnsgerb.supabase.co
+      - key: SUPABASE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: PERSIST_EVERY_TICKS
+        value: "15"

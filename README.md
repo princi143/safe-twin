@@ -99,6 +99,26 @@ and the approve / override / audit flow through the API.
 SAFE-TWIN is a decision-support advisory tool. It does not control equipment and does not replace site
 lockout/tagout (LOTO) procedures, certified safety controls or qualified personnel.
 
+## Deploy
+
+The frontend is a static site and goes on Vercel. The backend keeps a live telemetry loop and a WebSocket
+open, which Vercel's serverless functions can't do, so it runs on a normal web host (Render here).
+
+**Backend on Render**
+
+1. Render dashboard -> New -> Blueprint -> select this repo (it reads `render.yaml`).
+2. When asked, paste your Supabase publishable key as `SUPABASE_KEY`.
+3. Note the service URL, e.g. `https://safe-twin-api.onrender.com`. `/api/health` should answer there.
+
+**Frontend on Vercel**
+
+1. Vercel -> Add New -> Project -> import this repo.
+2. Set **Root Directory** to `frontend` (framework preset: Vite).
+3. Add the environment variable `VITE_API_URL` = your Render URL (no trailing slash), then deploy.
+
+Render's free plan sleeps after 15 minutes without traffic; the first visit after that takes about a minute
+while it wakes up, and the virtual cell starts again from its initial state.
+
 ## Docker (optional)
 
 ```bash
