@@ -1,0 +1,17 @@
+# Optional: run both services with `docker compose up --build`, then open http://localhost:5173
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    ports:
+      - "8000:8000"
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_BACKEND_URL: http://backend:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
